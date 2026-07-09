@@ -10,28 +10,37 @@ export default defineSchema({
     fileId: v.string(),
     fileName: v.string(),
     fileUrl: v.string(),
-    storageId: v.id("_storage"),
-  }),
+    storageId: v.id('_storage'),
+  })
+    .index('byCreatedBy', ['createdBy'])
+    .index('byFileId', ['fileId']),
+
   users: defineTable({
     email: v.string(),
     imageUrl: v.string(),
     userName: v.string(),
-    upgrade:v.boolean()
-  }),
-  
+    upgrade: v.boolean(),
+  }).index('byEmail', ['email']),
+
   documents: defineTable({
     embedding: v.array(v.number()),
     text: v.string(),
     metadata: v.any(),
-  }).vectorIndex("byEmbedding", {
-    vectorField: "embedding",
+  }).vectorIndex('byEmbedding', {
+    vectorField: 'embedding',
     dimensions: 768,
   }),
 
-  notes:defineTable({
-    fileId:v.string(),
-    notes:v.any(),
-    createdBy:v.string()
-  })
+  notes: defineTable({
+    fileId: v.string(),
+    notes: v.any(),
+    createdBy: v.string(),
+  }).index('byFileId', ['fileId']),
 
+  chats: defineTable({
+    fileId: v.string(),
+    role: v.string(), // 'user' | 'assistant'
+    content: v.string(),
+    createdBy: v.string(),
+  }).index('byFileId', ['fileId']),
 });

@@ -1,155 +1,188 @@
 "use client"
-import React from 'react';
+import React, { useState } from 'react';
 
-import { useMutation } from 'convex/react';
+import { useMutation, useQuery } from 'convex/react';
+import {
+  Check,
+  Crown,
+  LoaderCircle,
+  Zap,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
+import { Button } from '@/components/ui/button';
 import { api } from '@/convex/_generated/api';
 import { useUser } from '@clerk/nextjs';
 
-function UpgradePlans() {
+const FREE_FEATURES = [
+  '5 PDF uploads',
+  'Chat with your PDFs',
+  'AI summaries & notes',
+  'Export notes to Word',
+];
 
+const PRO_FEATURES = [
+  'Unlimited PDF uploads',
+  'Chat with your PDFs',
+  'AI summaries & notes',
+  'Export notes to Word',
+  'Priority support',
+];
+
+function UpgradePlans() {
   const userUpgradePlan = useMutation(api.user.userUpgradePlan);
   const { user } = useUser();
+  const userInfo = useQuery(api.user.GetUserInfo, {
+    userEmail: user?.primaryEmailAddress?.emailAddress,
+  });
+  const [paying, setPaying] = useState(false);
 
-  // ✅ After successful payment → update DB
+  const isUpgraded = !!userInfo?.upgrade;
+
   const onPaymentSuccess = async () => {
-    const result = await userUpgradePlan({
-      userEmail: user?.primaryEmailAddress?.emailAddress
+    await userUpgradePlan({
+      userEmail: user?.primaryEmailAddress?.emailAddress,
     });
-    console.log(result);
-    toast('Plan upgraded successfully 🎉');
+    toast.success('Welcome to Unlimited! 🎉');
   };
 
-  // ✅ Load Razorpay script
-  const loadRazorpay = () => {
-    return new Promise((resolve) => {
-      const script = document.createElement("script");
-      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+  const loadRazorpay = () =>
+    new Promise((resolve) => {
+      if (window.Razorpay) return resolve(true);
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
       script.onload = () => resolve(true);
       script.onerror = () => resolve(false);
       document.body.appendChild(script);
     });
-  };
 
-  // ✅ Handle Payment
   const handlePayment = async () => {
-    const res = await loadRazorpay();
+    setPaying(true);
+    try {
+      const loaded = await loadRazorpay();
+      if (!loaded) throw new Error('Razorpay SDK failed to load');
 
-    if (!res) {
-      toast("Razorpay SDK failed to load");
-      return;
+      const orderRes = await fetch('/api/create-order', {
+        method: 'POST',
+        body: JSON.stringify({ amount: 10 }),
+      });
+      const order = await orderRes.json();
+      if (!orderRes.ok) throw new Error(order.error || 'Could not create order');
+
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: order.amount,
+        currency: 'INR',
+        name: 'Papermind AI',
+        description: 'Unlimited Plan',
+        order_id: order.id,
+        handler: async function (response) {
+          const verifyRes = await fetch('/api/verify-payment', {
+            method: 'POST',
+            body: JSON.stringify(response),
+          });
+          const result = await verifyRes.json();
+          if (result.success) {
+            await onPaymentSuccess();
+          } else {
+            toast.error('Payment verification failed');
+          }
+        },
+        prefill: { email: user?.primaryEmailAddress?.emailAddress },
+        theme: { color: '#6366f1' },
+      };
+
+      new window.Razorpay(options).open();
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setPaying(false);
     }
-
-    // 🔥 Create order from backend
-    const orderRes = await fetch("/api/create-order", {
-      method: "POST",
-      body: JSON.stringify({ amount: 10 }), // ₹499
-    });
-
-    const order = await orderRes.json();
-
-    const options = {
-      key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-      amount: order.amount,
-      currency: "INR",
-      name: "AI PDF Note Taker",
-      description: "Unlimited Plan",
-      order_id: order.id,
-
-      handler: async function (response) {
-        // 🔐 Verify payment
-        const verifyRes = await fetch("/api/verify-payment", {
-          method: "POST",
-          body: JSON.stringify(response),
-        });
-
-        const result = await verifyRes.json();
-
-        if (result.success) {
-          await onPaymentSuccess();
-        } else {
-          toast("Payment verification failed ❌");
-        }
-      },
-
-      prefill: {
-        email: user?.primaryEmailAddress?.emailAddress,
-      },
-
-      theme: {
-        color: "#6366f1",
-      },
-    };
-
-    const paymentObject = new window.Razorpay(options);
-    paymentObject.open();
   };
 
   return (
     <div>
-      <h2 className='font-medium text-3xl'>Plans</h2>
-      <p>Update your plan to upload multiple PDFs to take notes</p>
+      <h2 className="text-2xl font-bold tracking-tight">Plans</h2>
+      <p className="mt-0.5 text-sm text-muted-foreground">
+        Start free. Upgrade once, keep it forever.
+      </p>
 
-      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 sm:py-12 lg:px-8">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:items-center md:gap-8">
-
-          {/* FREE PLAN */}
-          <div className="rounded-2xl border border-gray-200 p-6 shadow-sm sm:px-8 lg:p-12">
-            <div className="text-center">
-              <h2 className="text-lg font-medium text-gray-900">Free</h2>
-
-              <p className="mt-2 sm:mt-4">
-                <strong className="text-3xl font-bold text-gray-900 sm:text-4xl"> ₹0 </strong>
-                <span className="text-sm font-medium text-gray-700">/month</span>
-              </p>
-            </div>
-
-            <ul className="mt-6 space-y-2">
-              <li>✔ 5 PDF Upload</li>
-              <li>✔ Unlimited Notes</li>
-              <li>✔ Email support</li>
-              <li>✔ Help center access</li>
-            </ul>
-
-            <button className="mt-8 w-full rounded-full border border-indigo-600 px-6 py-3 text-indigo-600">
-              Current Plan
-            </button>
+      <div className="mx-auto mt-10 grid max-w-3xl grid-cols-1 gap-6 sm:grid-cols-2">
+        {/* Free plan */}
+        <div className="rounded-3xl border bg-card p-8 shadow-xs">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-muted-foreground" />
+            <h3 className="font-semibold">Free</h3>
           </div>
+          <p className="mt-4">
+            <span className="text-4xl font-extrabold">₹0</span>
+            <span className="text-sm text-muted-foreground"> / forever</span>
+          </p>
 
-          {/* PAID PLAN */}
-          <div className="rounded-2xl border border-gray-200 p-6 shadow-sm sm:px-8 lg:p-12">
-            <div className="text-center">
-              <h2 className="text-lg font-medium text-gray-900">Unlimited</h2>
+          <ul className="mt-6 space-y-2.5">
+            {FREE_FEATURES.map((feature) => (
+              <li key={feature} className="flex items-center gap-2 text-sm">
+                <Check className="h-4 w-4 shrink-0 text-green-500" />
+                {feature}
+              </li>
+            ))}
+          </ul>
 
-              <p className="mt-2 sm:mt-4">
-                <strong className="text-3xl font-bold text-gray-900 sm:text-4xl"> ₹10 </strong>
-                <span className="text-sm font-medium text-gray-700">/one-time</span>
-              </p>
-            </div>
+          <Button variant="outline" className="mt-8 w-full" disabled>
+            {isUpgraded ? 'Included' : 'Current plan'}
+          </Button>
+        </div>
 
-            <ul className="mt-6 space-y-2">
-              <li>✔ Unlimited PDF Upload</li>
-              <li>✔ Unlimited Notes</li>
-              <li>✔ Email support</li>
-              <li>✔ Help center access</li>
-            </ul>
-
-            {/* 💳 Razorpay Button */}
-            <div className='mt-5'>
-              <button
-                onClick={handlePayment}
-                className="w-full rounded-full bg-indigo-600 text-white px-6 py-3 hover:bg-indigo-700"
-              >
-                Upgrade to Unlimited
-              </button>
-            </div>
+        {/* Unlimited plan */}
+        <div className="relative rounded-3xl border-2 border-primary bg-card p-8 shadow-lg shadow-primary/10">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 px-3 py-1 text-xs font-semibold text-white shadow-md">
+            Most popular
           </div>
+          <div className="flex items-center gap-2">
+            <Crown className="h-4 w-4 text-amber-500" />
+            <h3 className="font-semibold">Unlimited</h3>
+          </div>
+          <p className="mt-4">
+            <span className="text-4xl font-extrabold">₹10</span>
+            <span className="text-sm text-muted-foreground"> / one-time</span>
+          </p>
 
+          <ul className="mt-6 space-y-2.5">
+            {PRO_FEATURES.map((feature) => (
+              <li key={feature} className="flex items-center gap-2 text-sm">
+                <Check className="h-4 w-4 shrink-0 text-green-500" />
+                {feature}
+              </li>
+            ))}
+          </ul>
+
+          {isUpgraded ? (
+            <Button variant="outline" className="mt-8 w-full" disabled>
+              <Crown className="h-4 w-4 text-amber-500" /> You're on Unlimited
+            </Button>
+          ) : (
+            <Button
+              variant="gradient"
+              className="mt-8 w-full"
+              onClick={handlePayment}
+              disabled={paying}
+            >
+              {paying ? (
+                <LoaderCircle className="h-4 w-4 animate-spin" />
+              ) : (
+                'Upgrade to Unlimited'
+              )}
+            </Button>
+          )}
         </div>
       </div>
+
+      <p className="mx-auto mt-6 max-w-md text-center text-xs text-muted-foreground">
+        Payments are processed securely by Razorpay and verified server-side
+        with signature checking.
+      </p>
     </div>
-  )
+  );
 }
 
-export default UpgradePlans
+export default UpgradePlans;

@@ -8,8 +8,13 @@
  * @module
  */
 
+import type * as chats from "../chats.js";
+import type * as documents from "../documents.js";
 import type * as fileStorage from "../fileStorage.js";
 import type * as langchain_db from "../langchain/db.js";
+import type * as lib_geminiEmbeddings from "../lib/geminiEmbeddings.js";
+import type * as myAction from "../myAction.js";
+import type * as notes from "../notes.js";
 import type * as user from "../user.js";
 
 import type {
@@ -19,8 +24,13 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  chats: typeof chats;
+  documents: typeof documents;
   fileStorage: typeof fileStorage;
   "langchain/db": typeof langchain_db;
+  "lib/geminiEmbeddings": typeof lib_geminiEmbeddings;
+  myAction: typeof myAction;
+  notes: typeof notes;
   user: typeof user;
 }>;
 
